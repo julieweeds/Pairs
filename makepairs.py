@@ -59,15 +59,25 @@ def generate_mono_list(lemmalist):
     print "Rejected multiwords "+str(mwcount)
     return monolist
 
-def find_hypernyms(sensedict,filterA,filterB,ratio):
+def find_hypernyms(sensedict,filterA,filterB,ratio,include_ancestors):
 
     hyperrels=[]
     hyporels=[]
+    totaldist=0
     for asynset in sensedict.keys():
 
+        ancestors = asynset.hypernym_distances()
+        hyps=[]
+        for (ancestor,distance) in ancestors:
+            if include_ancestors and distance > 0:
+                hyps.append((ancestor,distance))
+            elif distance == 1:
+                hyps.append((ancestor,distance))
 
-        hyps = asynset.hypernyms()
-        for hyp in hyps:
+        #hyps = asynset.hypernyms()
+        added=0
+        for (hyp,dist) in hyps:
+            
             if hyp in sensedict.keys():
                 if (len(hyperrels)+len(hyporels))%ratio > 0 and asynset not in filterA:
 
@@ -75,15 +85,22 @@ def find_hypernyms(sensedict,filterA,filterB,ratio):
                         hyperrels.append((sensedict[asynset],sensedict[hyp]))
                         filterA.append(asynset)
                         filterB.append(hyp)
+                        totaldist+=dist
+                        added+=1
 
                 elif asynset not in filterB:
                     if hyp not in filterA:
                         hyporels.append((sensedict[hyp],sensedict[asynset]))
                         filterA.append(hyp)
                         filterB.append(asynset)
+                        totaldist+=dist
+                        added+=1
+            if added>1: break
 
     print len(hyperrels),hyperrels
     print len(hyporels),hyporels
+    average = (totaldist*1.0)/(len(hyperrels)+len(hyporels))
+    print "Average distance = "+str(average)
     return (hyperrels,hyporels,filterA,filterB)
 
 def find_simpairs(sensedict):
@@ -111,7 +128,8 @@ def find_coords(sensedict,filterA,filterB,max):
                     if hypo != asynset and hypo not in filterB:
                         if hypo in sensedict.keys():
                             pair = (sensedict[asynset],sensedict[hypo])
-                            if pair not in rels:
+                            rev = (sensedict[hypo],sensedict[asynset])
+                            if pair not in rels and rev not in rels:
                                 rels.append(pair)
                                 filterA.append(asynset)
                                 filterB.append(hypo)
@@ -122,23 +140,24 @@ def find_coords(sensedict,filterA,filterB,max):
 
 if __name__=="__main__":
 
+    include_ancestors=True
 
 #    royalty=wn.synsets('royalty',wn.NOUN)
 #    bribe = wn.synsets('bribe',wn.NOUN)
 #    for s in royalty:
-#        print s, s.definition
+#        print s, s.definition, s.hypernyms(),s.hypernym_distances()
 #    royaltylemmas=wn.lemmas('royalty',wn.NOUN)
 #    for s in royaltylemmas:
 #        print s, s.count()
 #    for s in bribe:
-#        print s, s.definition
+#        print s, s.definition, s.hypernyms(), s.hypernym_distances()
 #
 #    exit()
 
     wordlist=generate_mono_list([x for x in wn.all_lemma_names(pos=wn.NOUN)])
     print wordlist
     sensedict={wn.synsets(alemma,wn.NOUN)[0] : alemma for alemma in wordlist}
-    (hyperpairs,hypopairs,filterA,filterB)=find_hypernyms(sensedict,[],[],3)
+    (hyperpairs,hypopairs,filterA,filterB)=find_hypernyms(sensedict,[],[],3,include_ancestors)
     #simpairs=find_simpairs(sensedict)
     (coordpairs,filterA,filterB) = find_coords(sensedict,filterA,filterB,len(hyperpairs)+len(hypopairs))
 
@@ -156,7 +175,7 @@ if __name__=="__main__":
     for (w1,w2) in coordpairs[0:poslength-neglength]:
         outlist.append([w1,w2,0])
 
-    with open('entpairs.json','w') as outpath:
+    with open('entpairs2.json','w') as outpath:
         json.dump(outlist,outpath)
 
     #write coordinate pairs
@@ -168,6 +187,6 @@ if __name__=="__main__":
         outlist.append([w1,w2,0])
     for (w1,w2) in coordpairs[0:poslength]:
         outlist.append([w1,w2,1])
-    with open('coordpairs.json','w') as outpath:
+    with open('coordpairs2.json','w') as outpath:
         json.dump(outlist,outpath)
 
